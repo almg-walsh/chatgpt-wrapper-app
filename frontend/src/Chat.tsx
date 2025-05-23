@@ -231,6 +231,7 @@ export default function Chat() {
           <input
             type="file"
             accept="image/*"
+            capture="environment" // Add this to access camera directly
             hidden
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
