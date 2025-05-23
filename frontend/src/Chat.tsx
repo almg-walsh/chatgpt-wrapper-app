@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import PhotoCamera from "@mui/icons-material/PhotoCamera";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import styled from "styled-components";
 
 type Message = {
@@ -221,17 +222,18 @@ export default function Chat() {
       )}
 
       <InputRow>
-        {/* Image upload button on the left */}
+        {/* Camera button */}
         <IconButton
           color="primary"
           component="label"
-          sx={{ mr: 1 }}
+          sx={{ mr: 0.5 }}
           disabled={loading}
+          title="Take a photo"
         >
           <input
             type="file"
             accept="image/*"
-            capture="environment" // Add this to access camera directly
+            capture="environment"
             hidden
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
@@ -240,6 +242,27 @@ export default function Chat() {
             }}
           />
           <PhotoCamera />
+        </IconButton>
+
+        {/* Gallery button */}
+        <IconButton
+          color="primary"
+          component="label"
+          sx={{ mr: 1 }}
+          disabled={loading}
+          title="Choose from gallery"
+        >
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleImageChange(e.target.files[0]);
+              }
+            }}
+          />
+          <PhotoLibraryIcon />
         </IconButton>
 
         {/* Text input in the middle */}
