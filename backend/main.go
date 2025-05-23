@@ -14,9 +14,20 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type ImageURL struct {
+	URL string `json:"url"`
+}
+
+// Update Message struct to handle complex content (text and images)
+type ContentItem struct {
+	Type     string    `json:"type,omitempty"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // Can be string or []ContentItem
 }
 
 type ChatRequest struct {
@@ -24,9 +35,10 @@ type ChatRequest struct {
 }
 
 type OpenAIRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
+	Model     string    `json:"model"`
+	Messages  []Message `json:"messages"`
+	Stream    bool      `json:"stream"`
+	MaxTokens int       `json:"max_tokens,omitempty"`
 }
 
 type OpenAIResponse struct {
@@ -46,10 +58,14 @@ var history []Message
 var mutex sync.Mutex
 
 func handleChat(w http.ResponseWriter, r *http.Request) {
-	var req ChatRequest
+	// Decode the request
+	var req struct {
+		Model    string    `json:"model"`
+		Messages []Message `json:"messages"`
+	}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -57,11 +73,23 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	history = append(history, req.Messages...)
 	mutex.Unlock()
 
+	// Use the model specified in the request or default to gpt-4-vision-preview
+	model := req.Model
+	if model == "" {
+		model = "gpt-4o"
+	}
+
 	openaiReq := OpenAIRequest{
-		Model:    "gpt-3.5-turbo",
+		Model:    model,
 		Messages: history,
 		Stream:   false,
+		// Add max_tokens if you need to limit response length
+		// MaxTokens: 300,
 	}
+
+	// Debug: Print the request being sent to OpenAI
+	requestJson, _ := json.MarshalIndent(openaiReq, "", "  ")
+	fmt.Println("Sending to OpenAI:", string(requestJson))
 
 	reqBody, _ := json.Marshal(openaiReq)
 	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
@@ -73,25 +101,29 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
-		http.Error(w, "OpenAI API call failed", http.StatusInternalServerError)
+		http.Error(w, "OpenAI API call failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer response.Body.Close()
 
 	body, _ := io.ReadAll(response.Body)
-	fmt.Println("OpenAI raw response:", string(body)) // Debug print
+
+	// Check for error in response
+	if response.StatusCode >= 400 {
+		fmt.Println("OpenAI error response:", string(body))
+		http.Error(w, "OpenAI API error: "+string(body), response.StatusCode)
+		return
+	}
 
 	var openaiResp OpenAIResponse
-	json.Unmarshal(body, &openaiResp)
+	err = json.Unmarshal(body, &openaiResp)
+	if err != nil {
+		http.Error(w, "Error parsing OpenAI response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	if len(openaiResp.Choices) == 0 {
-		// Try to parse error
-		var openaiErr OpenAIError
-		if err := json.Unmarshal(body, &openaiErr); err == nil && openaiErr.Error.Message != "" {
-			http.Error(w, "OpenAI error: "+openaiErr.Error.Message, http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, "No choices from OpenAI", http.StatusInternalServerError)
+		http.Error(w, "No choices returned from OpenAI", http.StatusInternalServerError)
 		return
 	}
 
@@ -105,7 +137,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", "https://almg-walsh.github.io/chatgpt-wrapper-app")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 		if r.Method == http.MethodOptions {
