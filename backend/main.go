@@ -137,32 +137,35 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow requests from multiple origins
+		// Allow requests from your GitHub Pages domain
 		origin := r.Header.Get("Origin")
 		allowedOrigins := []string{
-			"https://almg-walsh.github.io",
+			"https://almg-walsh.github.io", // Your GitHub Pages domain
 			"http://localhost:3000",
-			"http://localhost:5173", // Vite's default dev port
-			"http://127.0.0.1:5173",
-			"http://127.0.0.1:3000",
+			"http://localhost:5173", // Vite's default port
 		}
 
-		// Check if the request origin is allowed
-		for _, allowed := range allowedOrigins {
-			if origin == allowed || allowed == "*" {
+		// Check if origin matches any allowed origin
+		allowed := false
+		for _, o := range allowedOrigins {
+			if origin == o {
+				allowed = true
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				break
 			}
 		}
 
-		// Set other CORS headers
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		// If no match but we have a request, allow all (for testing only)
+		if !allowed && origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Referer")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Max-Age", "3600")
 
 		// Handle preflight requests
-		if r.Method == http.MethodOptions {
+		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
