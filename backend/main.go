@@ -137,13 +137,36 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "https://almg-walsh.github.io/chatgpt-wrapper-app")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		// Allow requests from multiple origins
+		origin := r.Header.Get("Origin")
+		allowedOrigins := []string{
+			"https://almg-walsh.github.io",
+			"http://localhost:3000",
+			"http://localhost:5173", // Vite's default dev port
+			"http://127.0.0.1:5173",
+			"http://127.0.0.1:3000",
+		}
+
+		// Check if the request origin is allowed
+		for _, allowed := range allowedOrigins {
+			if origin == allowed || allowed == "*" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
+
+		// Set other CORS headers
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "3600")
+
+		// Handle preflight requests
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -152,7 +175,7 @@ func main() {
 	godotenv.Load()
 	router := mux.NewRouter()
 	router.Use(enableCORS)
-	router.HandleFunc("/chat", handleChat).Methods("POST", "OPTIONS")
+	router.HandleFunc("/", handleChat).Methods("POST", "OPTIONS")
 	fmt.Println("Server running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

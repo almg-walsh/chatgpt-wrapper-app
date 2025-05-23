@@ -1,14 +1,10 @@
 import React from "react";
-import Chat from "./Chat";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
-import useMediaQuery from "@mui/material/useMediaQuery";
 import AppRoutes from "./routes";
 
 function App() {
-  // Detect system dark mode preference
-
-  // Create a theme instance based on preference
+  // Create a theme instance for dark mode
   const theme = React.useMemo(
     () =>
       createTheme({
@@ -34,8 +30,6 @@ function App() {
           Fix your plant!
         </h1>
         <AppRoutes />
-
-        <Chat />
       </div>
     </ThemeProvider>
   );

@@ -15,8 +15,8 @@ type Message = {
   role: string;
   content: string;
 };
-
-const API_URL = "https://chatgpt-wrapper-api.onrender.com"; // Change to your backend URL in production
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://chatgpt-wrapper-api.onrender.com";
 
 const ChatContainer = styled(Paper)`
   max-width: 480px;
@@ -117,7 +117,11 @@ export default function Chat() {
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Referer: window.location.origin,
+        },
+        credentials: "include", // For cookies if needed
         body: JSON.stringify(body),
       });
       const assistantMessage = await response.json();

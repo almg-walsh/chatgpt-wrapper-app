@@ -4,7 +4,7 @@ import Chat from "./Chat";
 
 const AppRoutes = () => (
   <Routes>
-    <Route path="/chatgpt-wrapper-app" element={<Chat />} />
+    <Route path="/" element={<Chat />} />
   </Routes>
 );
 
