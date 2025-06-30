@@ -30,5 +30,8 @@ data.forEach(conversation => {
   allMessages = allMessages.concat(formatted);
 });
 
+// Reverse the order so the latest messages are at the bottom
+allMessages = allMessages.reverse();
+
 fs.writeFileSync('openai-formatted-all.json', JSON.stringify(allMessages, null, 2));
 console.log('Exported all conversations to openai-formatted-all.json');

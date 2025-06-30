@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Paper,
@@ -7,6 +7,8 @@ import {
   IconButton,
   CircularProgress,
   Button,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import PhotoCamera from "@mui/icons-material/PhotoCamera";
@@ -32,7 +34,7 @@ const API_URL =
   import.meta.env.VITE_API_URL || "https://chatgpt-wrapper-api.onrender.com";
 
 const ChatContainer = styled(Paper)`
-  max-width: 480px;
+  max-width: 100%;
   margin: 40px auto;
   border-radius: 16px !important;
   display: flex;
@@ -77,12 +79,37 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Message[][]>([]);
+  const [activeTab, setActiveTab] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Load all conversations on mount
+  useEffect(() => {
+    const base = import.meta.env.BASE_URL || "/";
+
+    console.log(`${base}openai-formatted-all.json`);
+    fetch(`${base}openai-formatted-all.json`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load chat history");
+        return res.json();
+      })
+      .then((data) => {
+        // If data is a flat array, wrap it as a single conversation
+        if (Array.isArray(data) && data.length > 0 && !Array.isArray(data[0])) {
+          setConversations([data]);
+        } else if (Array.isArray(data)) {
+          setConversations(data);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading chat history:", err);
+      });
+  }, []);
 
   // Handle image selection
   const handleImageChange = (file: File) => {
@@ -103,6 +130,15 @@ export default function Chat() {
     }
   };
 
+  // When switching tabs, reset input/image as needed
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+    setInput("");
+    setImage(null);
+    setImagePreview(null);
+  };
+
+  // Send message in the active conversation
   const sendMessage = async () => {
     if (!input.trim() && !image) return;
     setLoading(true);
@@ -136,7 +172,7 @@ export default function Chat() {
     }
 
     const body = {
-      messages: [...messages, userMessage],
+      messages: [...(conversations[activeTab] || []), userMessage],
     };
 
     console.log(JSON.stringify(body));
@@ -152,33 +188,31 @@ export default function Chat() {
         body: JSON.stringify(body),
       });
       const assistantMessage = await response.json();
-      setMessages([...messages, userMessage, assistantMessage]);
+      setConversations((prev) => {
+        const updated = [...prev];
+        updated[activeTab] = [
+          ...(updated[activeTab] || []),
+          userMessage,
+          assistantMessage,
+        ];
+        return updated;
+      });
       setInput("");
       setImage(null);
       setImagePreview(null);
     } catch (err) {
-      // try {
-      //   // Instead of fetching, create a mock assistant response directly
-      //   const assistantMessage = {
-      //     role: "assistant",
-      //     content: "I received your message", // Or whatever default response you want
-      //   };
-
-      //   setMessages([...messages, userMessage, assistantMessage]);
-      //   setInput("");
-      //   setImage(null);
-      //   setImagePreview(null);
-      // } catch (err) {
-      // Your existing error handling
-
-      setMessages([
-        ...messages,
-        userMessage,
-        {
-          role: "assistant",
-          content: [{ type: "text", text: "Error: Could not reach server." }],
-        },
-      ]);
+      setConversations((prev) => {
+        const updated = [...prev];
+        updated[activeTab] = [
+          ...(updated[activeTab] || []),
+          userMessage,
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "Error: Could not reach server." }],
+          },
+        ];
+        return updated;
+      });
     } finally {
       setLoading(false);
     }
@@ -189,31 +223,25 @@ export default function Chat() {
 
   return (
     <ChatContainer elevation={3}>
-      {/* Import button */}
-      <Box display="flex" justifyContent="flex-end" p={1}>
-        <input
-          type="file"
-          accept="application/json"
-          ref={fileInputRef}
-          style={{ display: "none" }}
-          onChange={handleImport}
-        />
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Import History
-        </Button>
-      </Box>
+      {/* Tabs for each conversation */}
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {conversations.map((_, idx) => (
+          <Tab key={idx} label={`Chat ${idx + 1}`} />
+        ))}
+      </Tabs>
 
       <MessagesBox>
-        {messages.length === 0 && (
+        {conversations[activeTab]?.length === 0 && (
           <Typography color="textSecondary" align="center" sx={{ mt: 10 }}>
             Start the conversation!
           </Typography>
         )}
-        {messages.map((msg, i) => (
+        {conversations[activeTab]?.map((msg, i) => (
           <MessageRow key={i} $isUser={msg.role === "user"}>
             <MessageBubble $isUser={msg.role === "user"}>
               {typeof msg.content === "string" ? (
@@ -223,7 +251,7 @@ export default function Chat() {
                   msg.content
                 )
               ) : Array.isArray(msg.content) ? (
-                msg.content.map((item, idx) =>
+                msg.content?.map((item, idx) =>
                   item.type === "text" ? (
                     <ReactMarkdown key={idx}>{item.text}</ReactMarkdown>
                   ) : item.type === "image_url" ? (
@@ -231,7 +259,11 @@ export default function Chat() {
                       key={idx}
                       src={item.image_url.url}
                       alt="Sent image"
-                      style={{ maxWidth: "100%", borderRadius: 4, marginTop: 8 }}
+                      style={{
+                        maxWidth: "100%",
+                        borderRadius: 4,
+                        marginTop: 8,
+                      }}
                     />
                   ) : null
                 )
