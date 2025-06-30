@@ -6,11 +6,23 @@ import {
   TextField,
   IconButton,
   CircularProgress,
+  Button,
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import PhotoCamera from "@mui/icons-material/PhotoCamera";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import styled from "styled-components";
+import ReactMarkdown from "react-markdown";
+
+// Add this declaration to extend ImportMeta for Vite env variables
+interface ImportMetaEnv {
+  readonly VITE_API_URL?: string;
+  // add other env variables here if needed
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
 
 type Message = {
   role: string;
@@ -66,6 +78,7 @@ export default function Chat() {
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,6 +88,19 @@ export default function Chat() {
   const handleImageChange = (file: File) => {
     setImage(file);
     setImagePreview(URL.createObjectURL(file));
+  };
+
+  // Add this function to handle import
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const text = await e.target.files[0].text();
+      try {
+        const importedMessages = JSON.parse(text);
+        setMessages(importedMessages);
+      } catch (err) {
+        alert("Invalid file format");
+      }
+    }
   };
 
   const sendMessage = async () => {
@@ -163,6 +189,24 @@ export default function Chat() {
 
   return (
     <ChatContainer elevation={3}>
+      {/* Import button */}
+      <Box display="flex" justifyContent="flex-end" p={1}>
+        <input
+          type="file"
+          accept="application/json"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          onChange={handleImport}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Import History
+        </Button>
+      </Box>
+
       <MessagesBox>
         {messages.length === 0 && (
           <Typography color="textSecondary" align="center" sx={{ mt: 10 }}>
@@ -172,28 +216,28 @@ export default function Chat() {
         {messages.map((msg, i) => (
           <MessageRow key={i} $isUser={msg.role === "user"}>
             <MessageBubble $isUser={msg.role === "user"}>
-              {
-                typeof msg.content === "string"
-                  ? msg.content
-                  : Array.isArray(msg.content)
-                  ? msg.content.map((item, idx) => (
-                      <div key={idx}>
-                        {item.type === "text" && item.text}
-                        {item.type === "image_url" && (
-                          <img
-                            src={item.image_url.url}
-                            alt="Sent image"
-                            style={{
-                              maxWidth: "100%",
-                              borderRadius: 4,
-                              marginTop: 8,
-                            }}
-                          />
-                        )}
-                      </div>
-                    ))
-                  : JSON.stringify(msg.content) // Fallback for any other case
-              }
+              {typeof msg.content === "string" ? (
+                msg.role === "assistant" ? (
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                ) : (
+                  msg.content
+                )
+              ) : Array.isArray(msg.content) ? (
+                msg.content.map((item, idx) =>
+                  item.type === "text" ? (
+                    <ReactMarkdown key={idx}>{item.text}</ReactMarkdown>
+                  ) : item.type === "image_url" ? (
+                    <img
+                      key={idx}
+                      src={item.image_url.url}
+                      alt="Sent image"
+                      style={{ maxWidth: "100%", borderRadius: 4, marginTop: 8 }}
+                    />
+                  ) : null
+                )
+              ) : (
+                JSON.stringify(msg.content)
+              )}
             </MessageBubble>
           </MessageRow>
         ))}
